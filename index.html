@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SGU Vet Jeopardy</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --board: #0b2e33; --board-2: #123840; --line: #1c4650; --gold: #e8b94b; --sage: #7fae8e; --ink: #f5f1e6; --ink-dim: #cfe4e2;
+    --bg: #eee7d6; --text: #16221f; --dim: #5a6a64; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0a1615; --text: #f2ede0; --dim: #9fb3ad; color-scheme: dark; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; padding: 28px 16px 48px; }
+  .wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; font-weight: 600; color: #c99a35; margin: 0; }
+  h1 { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: clamp(1.8rem, 5vw, 2.6rem); margin: 4px 0 0; }
+  p.sub { color: var(--dim); margin: 6px 0 0; max-width: 60ch; }
+  .games { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .games a { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; text-decoration: none; color: var(--ink);
+    background: var(--board); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .games a:hover, .games a:focus-visible { background: var(--board-2); outline: 2px solid var(--gold); outline-offset: 2px; }
+  .games .name { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 1.2rem; }
+  .games .meta { grid-column: 1; color: var(--ink-dim); font-size: .88rem; }
+  .games .go { grid-row: 1 / span 2; grid-column: 2; font-family: "IBM Plex Mono", monospace; color: var(--gold); }
+  .how { color: var(--dim); font-size: .9rem; margin: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">SGU School of Veterinary Medicine</p>
+    <h1>Study Jeopardy</h1>
+    <p class="sub">Live review games you play on your phones. Open a game on the big screen, choose Start a new game, and everyone scans the code to join.</p>
+  </header>
+  <ul class="games">
+    <li><a href="repro-week-8/"><span class="name">Repro Week 8</span><span class="meta">Lessons 51–54 · female and male tract, estrous cycle, repro drugs, spay and castration anatomy</span><span class="go">Play →</span></a></li>
+  </ul>
+  <p class="how">No accounts needed. Phones and the host screen just need internet.</p>
+</div>
+</body>
+</html>
