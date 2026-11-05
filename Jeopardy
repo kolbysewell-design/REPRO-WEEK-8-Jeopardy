@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Repro Week 1 Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  /* Layout: home (host or join) -> host big-screen view (code bar, board/question stage, standings rail) or phone controller view. Same teal felt + gold identity as the read-aloud boards. */
+  :root {
+    --board-bg: #0b2e33; --board-bg-2: #123840; --board-line: #1c4650; --board-hover: #1a4c56;
+    --gold: #e8b94b; --gold-hi: #f2c765; --gold-dim: #c99a35; --coral: #e4633f; --sage: #7fae8e;
+    --ink-light: #f5f1e6; --ink-light-dim: #cfe4e2;
+    --on-gold: #1b1408; --on-sage: #0e2015; --on-coral: #2a0d05;
+    --ok-bg: rgba(127,174,142,.22); --bad-bg: rgba(228,99,63,.22);
+    --page-bg: #eee7d6; --panel-bg: #faf7f0; --panel-line: #ddd3ba;
+    --text-main: #16221f; --text-dim: #5a6a64; --shadow: rgba(11, 46, 51, 0.25); --focus: #2f7d8c;
+    --f-display: "Fraunces", Georgia, serif;
+    --f-body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page-bg: #0a1615; --panel-bg: #10201f; --panel-line: #1f3634;
+      --text-main: #f2ede0; --text-dim: #9fb3ad; --shadow: rgba(0,0,0,.5); --focus: #5fb0bf; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page-bg: #0a1615; --panel-bg: #10201f; --panel-line: #1f3634;
+    --text-main: #f2ede0; --text-dim: #9fb3ad; --shadow: rgba(0,0,0,.5); --focus: #5fb0bf; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page-bg); color: var(--text-main); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+  button, input, select { font-family: inherit; font-size: inherit; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; color: var(--gold-dim); font-weight: 600; margin: 0; }
+  h1, h2, h3 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; }
+  h1 { font-size: clamp(1.7rem, 4.4vw, 2.6rem); line-height: 1.1; }
+  h2 { font-size: 1.25rem; }
+  .dim { color: var(--text-dim); }
+  .tnum { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  /* home */
+  .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: var(--panel-bg); border: 1px solid var(--panel-line); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 2px 8px var(--shadow); min-width: 0; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label, .lbl { font-size: .74rem; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; color: var(--text-dim); }
+  .field input, .field select { border: 1px solid var(--panel-line); background: var(--page-bg); color: var(--text-main); border-radius: 8px; padding: 11px 12px; width: 100%; }
+  .code-input { font-family: var(--f-mono) !important; font-size: 1.8rem !important; letter-spacing: .4em; text-align: center; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg button { flex: 1; min-width: 90px; border: 1px solid var(--panel-line); background: transparent; color: var(--text-main); border-radius: 8px; padding: 9px 10px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--board-bg); color: var(--gold); border-color: var(--board-bg); }
+  .btn { border: none; border-radius: 9px; padding: 12px 18px; cursor: pointer; font-weight: 600; background: var(--gold); color: var(--on-gold); }
+  .btn:hover:not(:disabled) { background: var(--gold-hi); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--text-main); border: 1px solid var(--panel-line); font-weight: 500; }
+  .btn.ghost:hover:not(:disabled) { border-color: var(--coral); color: var(--coral); background: transparent; }
+  .btn.dark { background: var(--board-bg-2); color: var(--ink-light); border: 1px solid var(--board-line); }
+  .note { font-size: .85rem; color: var(--text-dim); }
+  .err { color: var(--coral); font-size: .9rem; font-weight: 500; }
+  .rules { margin: 0; padding-left: 18px; color: var(--text-dim); font-size: .9rem; display: flex; flex-direction: column; gap: 4px; }
+
+  /* host */
+  .hostbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; background: var(--board-bg); color: var(--ink-light); border-radius: 16px; padding: 16px 20px; box-shadow: 0 8px 24px var(--shadow); }
+  .codebox { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .codebox .big { font-family: var(--f-mono); font-size: clamp(2.4rem, 7vw, 4rem); line-height: 1; color: var(--gold); letter-spacing: .12em; font-weight: 600; }
+  .codebox .how { font-size: .9rem; color: var(--ink-light-dim); max-width: 34ch; }
+  .codebox .how b { color: var(--ink-light); }
+  .qr { background: #fff; padding: 6px; border-radius: 8px; line-height: 0; }
+  .qr img, .qr canvas { width: 96px; height: 96px; }
+  .hostbar .meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .pill { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; border: 1px solid var(--board-line); color: var(--ink-light-dim); border-radius: 999px; padding: 4px 10px; }
+  .host-main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .host-main { grid-template-columns: minmax(0, 1fr); } }
+  .stage { background: var(--board-bg); color: var(--ink-light); border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px var(--shadow); min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .banner .who { font-family: var(--f-display); font-size: clamp(1.2rem, 2.6vw, 1.7rem); }
+  .banner .who em { font-style: normal; color: var(--gold); }
+  .boardscroll { overflow-x: auto; }
+  .board { display: grid; grid-template-columns: repeat(5, minmax(110px, 1fr)); gap: 6px; min-width: 580px; }
+  .cat-h { background: var(--board-bg-2); border: 1px solid var(--board-line); border-radius: 6px; font-family: var(--f-display); font-weight: 600; font-size: .85rem; text-align: center; padding: 10px 6px; min-height: 64px; display: flex; flex-direction: column; justify-content: center; gap: 3px; text-wrap: balance; }
+  .cat-h small { font-family: var(--f-mono); font-size: .62rem; letter-spacing: .08em; color: var(--sage); }
+  .tile { background: var(--board-bg-2); border: 1px solid var(--board-line); border-radius: 6px; color: var(--gold); font-family: var(--f-mono); font-weight: 600; font-size: 1.35rem; min-height: 60px; cursor: pointer; }
+  .tile:hover:not(:disabled) { background: var(--board-hover); }
+  .tile:disabled { background: transparent; border-color: transparent; color: transparent; cursor: default; }
+  .tile.static { cursor: default; }
+  .qhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .qhead .cat { text-transform: uppercase; letter-spacing: .1em; font-size: .78rem; color: var(--gold); font-weight: 600; }
+  .timer { font-family: var(--f-mono); font-size: 2rem; color: var(--gold); font-variant-numeric: tabular-nums; min-width: 2.5ch; text-align: right; }
+  .timer.low { color: var(--coral); }
+  .stem { font-family: var(--f-display); font-size: clamp(1.15rem, 2.4vw, 1.6rem); line-height: 1.45; margin: 0; max-width: 70ch; }
+  .qimg { display: block; max-width: 100%; width: 360px; border-radius: 8px; background: #fff; cursor: zoom-in; }
+  .qimg.big { width: 100%; max-width: 640px; cursor: zoom-out; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  .opt { position: relative; display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 11px 14px; border-radius: 9px; border: 1px solid var(--board-line); background: var(--board-bg-2); overflow: hidden; }
+  .opt .lt { font-family: var(--f-mono); color: var(--gold); font-weight: 600; font-size: 1.1rem; }
+  .opt .txt { position: relative; z-index: 1; font-size: 1.05rem; }
+  .opt .n { position: relative; z-index: 1; font-family: var(--f-mono); color: var(--ink-light-dim); font-size: .9rem; }
+  .opt .fill { position: absolute; inset: 0 auto 0 0; background: rgba(232,185,75,.13); z-index: 0; }
+  .opt.right { border-color: var(--sage); background: var(--ok-bg); }
+  .opt.right .lt { color: var(--sage); }
+  .why { border-top: 1px solid var(--board-line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .why p { margin: 0; color: var(--ink-light-dim); max-width: 75ch; }
+  .why .src { font-size: .8rem; }
+  .ctrls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+  .progress { font-family: var(--f-mono); color: var(--ink-light-dim); font-size: .95rem; }
+  .rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .standings li { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 8px; background: var(--page-bg); border: 1px solid var(--panel-line); }
+  .standings li.off { opacity: .5; }
+  .standings li.turn { border-color: var(--gold-dim); }
+  .standings .rk { font-family: var(--f-mono); color: var(--text-dim); font-size: .85rem; }
+  .standings .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .standings .nm small { display: block; color: var(--text-dim); font-weight: 400; font-size: .75rem; }
+  .standings .sc { font-family: var(--f-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .neg { color: var(--coral); }
+  .delta { font-family: var(--f-mono); font-size: .8rem; }
+  .delta.up { color: var(--sage); } .delta.down { color: var(--coral); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--sage); }
+  .teamcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .teamcol { background: var(--board-bg-2); border: 1px solid var(--board-line); border-radius: 10px; padding: 12px; min-width: 0; }
+  .teamcol h3 { font-size: 1rem; color: var(--gold); margin-bottom: 6px; }
+  .teamcol ul { margin: 0; padding-left: 16px; color: var(--ink-light-dim); }
+  .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* phone */
+  .phone { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .pbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--board-bg); color: var(--ink-light); border-radius: 12px; padding: 10px 14px; }
+  .pbar .nm { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pbar .nm small { display: block; font-weight: 400; color: var(--ink-light-dim); font-size: .75rem; }
+  .pbar .sc { font-family: var(--f-mono); font-size: 1.4rem; color: var(--gold); font-weight: 600; }
+  .pcard { background: var(--board-bg); color: var(--ink-light); border-radius: 14px; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .pcard .stem { font-size: 1.08rem; }
+  .pchoices { display: flex; flex-direction: column; gap: 8px; }
+  .pchoice { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center; text-align: left; padding: 14px; min-height: 56px; border-radius: 10px; border: 1px solid var(--board-line); background: var(--board-bg-2); color: var(--ink-light); cursor: pointer; font-size: 1rem; }
+  .pchoice .lt { font-family: var(--f-mono); color: var(--gold); font-weight: 600; font-size: 1.1rem; }
+  .pchoice:disabled { cursor: default; opacity: .55; }
+  .pchoice.mine { opacity: 1; border-color: var(--gold); background: var(--board-hover); }
+  .pchoice.right { opacity: 1; border-color: var(--sage); background: var(--ok-bg); }
+  .pchoice.wrong { opacity: 1; border-color: var(--coral); background: var(--bad-bg); }
+  .pboard { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .pboard .cat-h { font-size: .62rem; min-height: 54px; padding: 6px 3px; }
+  .pboard .cat-h small { display: none; }
+  .pboard .tile { font-size: .95rem; min-height: 46px; }
+  .big-msg { font-family: var(--f-display); font-size: 1.6rem; line-height: 1.2; }
+  .big-msg.ok { color: var(--sage); } .big-msg.bad { color: var(--coral); }
+  .center { text-align: center; align-items: center; }
+  .teampick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .teampick button { padding: 16px 10px; border-radius: 10px; border: 1px solid var(--board-line); background: var(--board-bg-2); color: var(--ink-light); font-family: var(--f-display); font-weight: 600; font-size: 1.05rem; cursor: pointer; }
+  .wager { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .wager input[type=range] { width: 100%; accent-color: var(--gold); }
+  .wager .amt { font-family: var(--f-mono); font-size: 2.6rem; color: var(--gold); font-weight: 600; }
+  details summary { cursor: pointer; color: var(--gold); font-size: .9rem; }
+  details ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink-light-dim); font-size: .9rem; display: flex; flex-direction: column; gap: 6px; }
+  .podium { display: flex; flex-direction: column; gap: 8px; }
+  .podium .row { display: flex; justify-content: space-between; gap: 10px; font-family: var(--f-display); font-size: 1.3rem; padding: 10px 14px; border-radius: 10px; background: var(--board-bg-2); border: 1px solid var(--board-line); }
+  .podium .row:first-child { border-color: var(--gold); color: var(--gold); font-size: 1.6rem; }
+  @media (prefers-reduced-motion: no-preference) { .pulse { animation: pulse 1.6s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .55; } } }
+  [hidden] { display: none !important; }
+  img { max-width: 100%; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+(function () {
+  "use strict";
+  /* ---------- clue data (Lessons 51–54) ---------- */
+  const IMG_LIG = "data:image/jpeg;base64,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xwMjn8aGBkado1hfaBZPqdokzwBZAGHQgVZh1B5J0iUeXCUIVB071Z0xkn0cA84TGAcdqx4MR3EbbsAEjHtg1DZSRv6McadBnq3NXkP75gewFZOnyjydORTwyFv0rTgdZJJHU9DiquKxZ7UUg5FLTQgHSloooA5Xxf4F0zxLuuP+PTUDtH2pF3bgOzLkBuO/B4HOBivK9U+HniXTvNb7B9qijx+8tXD7s46L988n+72PbmvfqK7KGOq0VyrVeZlOjGWp83xeFvEE0qRJomohnYKC9s6jJ9SRgD3PFdV4f+FeqXcofW5FsIFbmNGWSRxx0wSoBGeckgjpXs1FbTzOrJWikiFh4rcpaRpNhotmLPTLZbeAMW2qSSSepJPJP17ADtV2iivObbd2dCVgooopAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUlHegBaKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKwfGPGhTY9Qf1rerA8af8gCf/AHh/OgCv4bJOju/qo/lVBiJY12/eyVP6mtPw2R/Y6+m0ZrDgn23UsQ/56n8ttYyZrFG3pRCvYR4/1dv/AEq5pz/6NK3rK38zWHocxfUWXdlPsSMPx3VehmEMdvBnmSRj+tOLuKSsdEnCCnZqMNlc+lKrZFXcixJmjNNBpqck1TESZopBS5pXAM0ZopaYCZozS0UANJNKCaWigBM0tFFABSUtFACUUtFABRRRQAUmaWigAooopAFJS0UwEpaKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAEo70UncUdQHUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAVz/AI250GYerKP1roK5bx3IxsILdesso/QikwQ/wyCNKMRPOBz+FYyoserOrcblOCe5/wD1VsaPN5MDKY+MAE/hXI63fvaMb5SGSGTcVz2Py/1rCTN4ov6A23U7o7iFGnxKD6H5qma4EepaVG0mc7z9eRVVZWi2/ZGV4py6bx6AcfzrP1lza6lo8pYcblPPuKlOxTjc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7Zeh1yMBzkBaravr+maJAZtUu47de28/e+lcImoeMPFA26TZjRrNwR9rn5fHsAf5itnRvhzpttcG81iaXVrwtu825bIU47AYroijCTKMnjbW9ffyPBuktJHyPtl18qL6EYzmpbL4eTalMLzxbqk99KeTboxWJfUYBGfyru4oYoUEcUaIo6BRjFTD361ZBBYWdvp9pHaWcSxQRDCIowB3rxn4w6f9l8VC7VZdl5Arl2Hy71+QhTjsFQke/uK9urmvH3hpfEuhvFGMXtvmW2YBcs2PuZPQNx3HIB7YrrwVZUayb22MqsOaNkeR/DfSP7X8WWiuuYbY/aJPovT/AMe217b4gk0Z7JrLXrq2ht7kY2TXHlbwCDwcg+nSvGPBviseDXvY5tIae6kYI5ebyjHtz8uCp5znP0ql408US+KdRiunt/s0cUXlpF5m/HJJOcDr9O1enXw1WviE3pFbM54VIwh5nrOh2vgbR777Ro97p0Vy6+XldR3lgSOMFznkCqvxd0n7f4aF7GuZbGTf77G4b/2U/hXiAJBBBwR0NelP8VhcaYbK90MTiSHypm+17d+RgnGw4zzUTwdWnVjUg3J9blKrGUXF6Hmte8/CrT/sPg22dllWS7ked1kGMZO1SOOhVVP45rybwV4al8TayltiVLOP5rmZAP3a84GTxkkYHXucEA19CxRRwRJFCixxxqFREGAoHAAHYUs0rKypLfdhh4a8w+iiivFOsKKKKACiiigAooooAKKKKACiiigApDS0GgAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigBKQ9KWkJPakB5BYnGoeIRtyftn/sgqh4cgM3lRoPv3Ls36V0Ogxxvr3iSFuSs+/n/cWqHguJm1RB0XzGP04rmXxM6ZbI6K9hKwCFOCPu/WrmoXS2l5YXMpCoQA59ev9ap66fs+oh2P7uIbsetU9ZuItT05I1OFibazHrjrn8zVxiSy9eIr+I/t6k5VAu3tjnFSXzJO5JAx1x6GqlvI6W8UdwcuiBS/97Hei4mEULOSMAZFdL0RCjqUFLjVUit5ZUjj+Y7SapeNNXudQW305ZA0M86gpn5sAitKytbgWkl2Vyz8/hXN6VBHqXiq4umP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AooooAKKKKACiiigAoopD1oAWikpaACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKSlpKGAtFIKWgArwn4raVJp/i2e4EKpb3qrLEUXAJwA+eMbtwJPX7wJ617tXP8AjXw1F4m0Z7bESXkfzW07g/u24yMjnBAwevY4JArrwVdUat3s9DKrDnjZHA/BH/kKan/1wX/0Kul+Ivg3UPFF1ZS2E9rGsCMr+ezAnJHTCn0ryqz1HXfB+o3UFu7WN2P3cytGjHjkdQRjuCOoq+fiL4rP/MV/8l4v/ia9Ophq0q/tqTX9I541IqHJJHongn4dxaBeLqN/crc3iAiNUXCRk8E88k/lWL8WvFltPb/2Fp8qyneGunQ5UY5CZ7nPJ9MD3rhtQ8W+INRjMd3q1y0bcMitsBHuFxmsWrp4Obq+1rSu0KVVcvLBD4opJ5UihRpJJGCoiDJYngADua+lfD+n/wBlaHYWBWJXt4ER/KGFLgfMRwOpyc9815x8KvBsnmx6/qsCiPbmzikXknjEuOw/u565zxgE+r1w5liFOSpx6fmbYeDS5mFFFFeYdAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFIaWk70AFLSUtLqAUUUUwCiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigDK8Q+HtM8RWq2+qQb9mTFIp2vGSMZB/Lg5BwMg4rzvU/hDcLubStVikzJ8sdzGU2pz1Zc5PT+EZ56dK9Zoroo4qrRVoPQiVOMt0eN2vwj1dp1W71CxihOdzxb5GHHGFKqDzjuK7Lwv8OtJ0KWO6nZr69jbcksg2ohGcFUz15HUnkAjFdlRV1MdXqKzehMaMI62CiiiuQ1CiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigD/9k=";
+const L51="Lesson 51: Structure and Function of the Female Reproductive System";
+const L52="Lesson 52: Structure of the Male Reproductive System";
+const L53="Lesson 53: Function of the Female Reproductive System";
+const L53M="Lesson 53: Function of the Male Reproductive System section";
+const L54="Lesson 54: Drugs in LA Repro and Surgical Drugs";
+const LV={100:1,200:2,300:3,400:3,500:4};
+
+const CATS=[
+{name:"Female Anatomy",lec:"L51",clues:[
+ {v:100,type:"Lesion localization",topic:"Right vs left ovary position in the bitch",
+  stem:"A 1-year-old bitch is undergoing ovariohysterectomy, and the surgeon has found the left ovary easily. Where should the surgeon expect to find the right ovary relative to the left?",
+  ch:["More caudal","More cranial","More ventral","At the pelvic inlet","Lateral to the colon"],a:1,
+  why:"In dogs and cats the right ovary lies more cranially than the left, which makes it harder to reach during a spay. It sits dorsal to the descending duodenum and ascending colon.",
+  wr:["Opposite of the true relationship. This would be correct if asked where the left ovary lies relative to the right.",null,"Both ovaries lie ventral to the lumbar vertebrae, high in the dorsal abdomen. The defining difference between them is cranial versus caudal, not ventral position.","The cow's ovaries make the most caudal migration and sit just cranial to the pelvic inlet. Correct for a cow, not a bitch.","The left ovary lies between the descending colon and the abdominal wall. Correct if the question asked about the left ovary."],
+  src:L51+", slide 9"},
+ {v:200,type:"Next best step",topic:"Suspensory ligament during spay",img:true,
+  stem:"A 2-year-old deep-chested bitch is undergoing ovariohysterectomy, and the left ovary cannot be brought up to the incision. Which labeled structure should the surgeon break down to exteriorize the ovary?",
+  ch:["Structure A","Structure B","Structure C","Structure D","Structure E"],a:2,
+  why:"C is the suspensory ligament, the cranial free edge of the mesovarium anchoring the ovary to the last few ribs and transversalis fascia. It is ruptured or strummed during a spay to free the ovary for removal.",
+  wr:["A is the mesosalpinx, which holds the uterine tube and helps form the ovarian bursa. Correct if asked which fold joins the mesovarium to form the bursa.","B is the proper ligament of the ovary, joining the ovary to the uterine horn. Correct if asked which ligament is the caudal continuation of the mesovarium's free edge.",null,"D is the round ligament, which passes through the inguinal canal in the bitch. Correct if asked about a structure that predisposes to inguinal herniation of the uterus.","E is the mesometrium, which carries the uterine vessels. Correct if asked which part of the broad ligament conducts the uterine vessels."],
+  src:L51+", slides 26–27; "+L54+", slide 75"},
+ {v:300,type:"Next best step",topic:"Passing the AI gun through the bovine cervix",
+  stem:"During artificial insemination of a 4-year-old Holstein cow, the catheter passes easily through the vagina and then stops in a blind recess that rings the cervix. What is the most appropriate next step?",
+  ch:["Deposit semen at that site","Switch to a spirette catheter","Redirect at a craniodorsal angle","Guide the cervix per rectum","Pass a vaginal speculum first"],a:3,
+  why:"In the cow the vaginal fornix forms a ring around the portio vaginalis and is the classic point of obstruction. The firm cervix is the landmark palpated per rectum, and the hand twists and bends it onto the gun until the rings slide over the tip.",
+  wr:["Semen must be deposited just past the end of the cervix, not in the fornix.","The spirette is for the sow, whose cervix has no portio vaginalis or fornix and whose interlocking pulvini block a regular catheter.","The craniodorsal insertion angle is for the bitch, because of the caudoventral inclination of her tract.",null,"A speculum is used in the mare to judge whether the cervix looks estrous. It does not get a catheter past the bovine fornix."],
+  src:L51+", slides 6, 42, 53, 63, 67"},
+ {v:400,type:"Management",topic:"Windsucking and Caslick's procedure",
+  stem:"A 6-year-old Thoroughbred mare has recurrent endometritis and infertility. Her anus is sunken cranially, the dorsal vulvar commissure sits above the pelvic floor, and air is heard entering the vagina as she walks. Which procedure best corrects the underlying problem?",
+  ch:["Incision of the craniodorsal vagina","Suturing of the dorsal vulva","Swabbing of the clitoral sinus","Ligation of the uterine artery","Breakdown of the suspensory ligament"],a:1,
+  why:"Elevated dorsal commissure → sunken anus, raised vestibular floor and an inefficient constrictor vulvae → windsucking and fecal contamination → endometritis. Caslick's procedure sutures the upper vulva to restore the seal.",
+  wr:["The craniodorsal vaginal wall gives surgical access to the peritoneal cavity, used for ovarian surgery in horses. Correct if asked for an approach to the ovary.",null,"The clitoral sinus can harbor bacteria such as those of contagious equine metritis. Swabbing would fit a screening question, but it does not fix conformation.","The uterine artery is palpated per rectum for fremitus in pregnancy. Ligating uterine vessels is a spay step in small animals.","Rupturing the suspensory ligament frees the ovary during a canine spay. It has no role in perineal conformation."],
+  src:L51+", slides 65, 69, 71–72"},
+ {v:500,type:"Next best step",topic:"Fremitus before prostaglandin treatment",
+  stem:"A 5-year-old Holstein cow with no breeding records is scheduled for dinoprost as part of a herd synchronization program. On rectal palpation, the artery coursing in the mesometrium has a strong, buzzing pulsation. What is the most appropriate next step?",
+  ch:["Give dinoprost as scheduled","Give gonadorelin, then dinoprost","Insert a progesterone device","Give dexamethasone instead","Withhold prostaglandin treatment"],a:4,
+  why:"The vessel in the mesometrium is the uterine artery, and a palpable thrill (fremitus) from the third month onward is diagnostic of pregnancy. Prostaglandin F2α causes luteolysis and is used to terminate pregnancy, so giving it would abort her.",
+  wr:["Correct only for a confirmed open cow. Here dinoprost would lyse the CL and end the pregnancy.","The GnRH–PGF2α–GnRH protocol still contains a luteolytic dose. Correct for an open cow entering fixed-time AI.","Progestins are used for synchronization and to maintain pregnancy, but a pregnant cow does not need synchronizing. Correct for an open cow on a progestin protocol.","Dexamethasone induces parturition in cattle near term. Correct only if she were close to term and induction were wanted.",null],
+  src:L51+", slides 45–46, 69; "+L54+", slides 15, 24, 27"}
+]},
+{name:"Male Anatomy",lec:"L52",clues:[
+ {v:100,type:"Management",topic:"Castration approach in the tom",
+  stem:"A 7-month-old domestic shorthair tom is presented for routine castration. Given where his scrotum sits, which castration method is typically used?",
+  ch:["Scrotal incision","Prescrotal incision","Inguinal incision","Ventral midline incision","Burdizzo clamping"],a:0,
+  why:"The cat's scrotum is sub-anal in the perineum and held tightly against it, so castration is done through a scrotal incision.",
+  wr:[null,"The prescrotal approach is common in dogs, whose scrotum is pendulous and inguinal.","An inguinal approach fits a testis retained in the inguinal canal, as in cryptorchidism.","A midline abdominal approach is used for ovariohysterectomy and for an abdominally retained testis.","The Burdizzo is applied to the long scrotal neck of ruminants."],
+  src:L52+", slides 6, 26, 71, 73; "+L54+", slides 51, 55"},
+ {v:200,type:"Lesion localization",topic:"Bovine epididymal tail position",
+  stem:"During a breeding soundness exam on a 3-year-old Hereford bull, the clinician wants to evaluate the largest and most easily palpated part of the epididymis. Where relative to the testis should she palpate?",
+  ch:["Dorsal pole","Cranial pole","Ventral pole","Caudodorsal aspect","Lateral surface"],a:2,
+  why:"In the bull the epididymis lies medial to the vertically oriented testis, with the head covering the dorsal third and the large, prominent tail at the ventral pole. The tail is what you palpate in a BSE.",
+  wr:["The bull's epididymal head is dorsal. The boar's tail is dorsal to the testis.","The head of the epididymis sits at the cranial pole in the dog and cat.",null,"Correct for the boar, as in the Week 8 FF question.","The bull's epididymis lies medial to the testis. The stallion's testicular bursa opens laterally."],
+  src:L52+", slides 9, 27, 31"},
+ {v:300,type:"Next best step",topic:"Open castration: ligament of the epididymal tail",
+  stem:"During an open castration of a 1-year-old Labrador, the parietal vaginal tunic has been incised. The testis is exposed but remains attached to the inner surface of the tunic at its caudal pole. What should the surgeon separate next?",
+  ch:["Mesoductus deferens","Proper testicular ligament","Mesorchium","Cremaster muscle","Ligament of the epididymal tail"],a:4,
+  why:"The ligament of the tail of the epididymis attaches the epididymal tail to the parietal vaginal tunic. In an open castration it is separated digitally so the testis can be exteriorized before the cord is ligated.",
+  wr:["The mesoductus deferens joins the ductus to the mesorchium and is handled with the cord. Correct if asked which fold surrounds the ductus deferens and its vessels.","The proper ligament joins the testis to the epididymal tail, so both leave together. Correct if asked what anchors the testis to the epididymis.","The mesorchium surrounds the testicular artery, vein and nerve within the cord. Correct if asked which fold carries the testicular vessels.","The cremaster runs on the caudal border of the cord, outside it, from the internal abdominal oblique. Correct if asked which muscle draws the testis toward the body.",null],
+  src:L52+", slides 10, 14, 17, 21, 24"},
+ {v:400,type:"Mechanism",topic:"Stallion erection and external pudendal vein",
+  stem:"A breeding stallion loses his erection when collected with his hind limbs held close together but maintains it when mounting with the hind limbs widely abducted. Which mechanism best explains the difference?",
+  ch:["Constriction of the external pudendal vein","Compression of the dorsal penile vein","Contraction of the retractor penis","Elongation of the sigmoid flexure","Pressure from the constrictor vestibuli"],a:0,
+  why:"Unique to the horse, the body of the penis drains through the external pudendal vein, which passes through the origins of the gracilis and pectineus. Abducting the hind limbs stretches these muscles and constricts the vein, trapping blood in the penis.",
+  wr:[null,"In other species drainage is at the root through the dorsal vein, compressed by the ischiourethral muscles. Correct for the dog.","The retractor penis draws the penis back into the prepuce and would end, not support, an erection.","The sigmoid flexure belongs to the fibroelastic penis of bulls and boars. The stallion's penis is musculocavernous.","The female's constrictor vestibuli compresses behind the bulbus glandis during the canine tie."],
+  src:L52+", slides 36–37, 59, 66, 68"},
+ {v:500,type:"Next best step",topic:"Prostatic enlargement and castration",
+  stem:"An intact 8-year-old Labrador used occasionally at stud strains to urinate and defecate but is still passing both. Rectal palpation reveals a diffusely, symmetrically enlarged prostate at the bladder neck, and the owner has no further breeding plans. What is the most appropriate recommendation?",
+  ch:["Perineal hernia repair","Chorionic gonadotropin injection","Dexamethasone course","Castration","Scrotal urethrostomy"],a:3,
+  why:"The prostate sits at the bladder neck, and enlargement from prostatitis or hyperplasia causes urinary and digestive signs. Treatment of prostatic disease, including hypertrophy, is a listed indication for castration, and breeding is no longer a concern.",
+  wr:["Perineal hernia is also an indication for castration, but nothing here describes a perineal swelling. Correct if the exam found one.","hCG is used for diagnostic stimulation of testicular function in suspected cryptorchids. Correct if a retained testis needed confirming.","Corticosteroids are used for reproductive inflammation such as endometritis and metritis, not prostatic enlargement.",null,"Scrotal urethrostomy is done with castration for urethral obstruction. Correct if the dog could not pass urine."],
+  src:L52+", slide 76; "+L54+", slides 13, 24, 40–41"}
+]},
+{name:"Cycle & Follicles",lec:"L53",clues:[
+ {v:100,type:"Interpreting a result",topic:"Progesterone timing in the bitch",
+  stem:"A breeder is tracking serum progesterone in a 3-year-old bitch with a bloody vulvar discharge. At what point in her cycle should progesterone first begin to rise?",
+  ch:["At the start of proestrus","At the start of estrus","At the end of estrus","Midway through diestrus","During anestrus"],a:1,
+  why:"In the bitch, estrogen peaks at the end of proestrus, LH peaks at the beginning of estrus and progesterone starts to rise at the beginning of estrus. This differs from the cow, where progesterone stays low through estrus.",
+  wr:["Proestrus is estrogen-dominant with the bloody discharge. Correct if asked when estradiol is rising.",null,"In the cow, LH peaks at the end of estrus. The bitch's progesterone is already rising by then.","Diestrus has a mature CL and progesterone that is already high, not just beginning to rise.","Anestrus has low estrogen and progesterone with inactive ovaries."],
+  src:L53+", slides 6, 8, 12"},
+ {v:200,type:"Most likely mechanism",topic:"Postpartum anestrus",
+  stem:"A 4-year-old Holstein in poor body condition has shown no estrus 70 days after calving. Ultrasonography shows small ovaries with no ovulatory follicles and no functional corpus luteum. Which endocrine state best explains these findings?",
+  ch:["Persistently high progesterone","Excess inhibin secretion","Premature preovulatory LH surge","Elevated basal estradiol","Insufficient GnRH pulse frequency"],a:4,
+  why:"Inactive ovaries with no ovulatory follicles or CL define anestrus, which results from insufficient hypothalamic GnRH pulses and low FSH and LH. Nutritional and postpartum anestrus are listed examples.",
+  wr:["High progesterone needs a mature CL, as in diestrus. Correct if a functional CL were present.","Inhibin comes from large dominant follicles and suppresses FSH. Correct during follicular dominance.","An LH surge follows an estradiol threshold, causes ovulation and leaves a CL behind.","Rising estradiol comes from growing follicles in proestrus and estrus. Correct for a cow approaching heat.",null],
+  src:L53+", slides 7–8, 19, 22"},
+ {v:300,type:"Mechanism",topic:"Luteolysis: oxytocin and endometrial PGF2α",
+  stem:"A heifer with extensive endometrial damage fails to return to estrus, and serial rectal exams show a corpus luteum persisting well past 21 days. Which step of the normal luteolytic pathway is most likely failing?",
+  ch:["Endometrial PGF2α production","Oxytocin release by the CL","Surge center GnRH release","Follicular inhibin secretion","FSH-driven follicle recruitment"],a:0,
+  why:"In ruminants, oxytocin from the aging CL binds endometrial receptors and drives endometrial PGF2α, which reaches the ovary by uterine vein–ovarian artery countercurrent exchange and lyses the CL. Damaged endometrium cannot make the PGF2α, so the CL persists.",
+  wr:[null,"The CL is present and can still release oxytocin. Correct if the defect were in the CL rather than the endometrium.","The surge center drives the preovulatory LH surge after luteolysis. Its failure would block ovulation, not luteolysis.","Inhibin suppresses FSH during dominance and plays no part in lysing the CL.","FSH pulses recruit follicles even under high progesterone. Waves would continue but would not remove the CL."],
+  src:L53+", slides 13–14, 18, 22"},
+ {v:400,type:"Next best step",topic:"Starting synchronization on a new wave",
+  stem:"A dairy herd's fixed-time AI program is giving poor results, and ultrasonography at the start of the protocol shows most cows already carry a large dominant follicle mid-wave. Which day-0 treatment would best align the protocol with a new follicular wave?",
+  ch:["Dinoprost on day 0","FSH on day 0","Gonadorelin on day 0","Oxytocin on day 0","Dexamethasone on day 0"],a:2,
+  why:"Synchronization works better when aligned with a new follicular wave. Day-0 GnRH induces ovulation or luteinization of the existing dominant follicle, clearing it so a fresh wave emerges before PGF2α on day 7.",
+  wr:["PGF2α is given on day 7 to lyse a mature CL. Correct as the day-7 step, not day 0.","FSH drives superovulation in embryo donors. Correct if the goal were many ovulations.",null,"Oxytocin stimulates uterine contraction and milk letdown. Correct for milk letdown.","Dexamethasone induces parturition near term. Correct for a cow close to calving."],
+  src:L53+", slide 17; "+L54+", slides 12, 20, 24, 27"},
+ {v:500,type:"Interpreting a result",topic:"Oocyte meiotic arrest and cAMP",
+  stem:"In an embryo lab, cumulus-oocyte complexes are aspirated from a cow's dominant follicle before any LH surge and held in hormone-free medium. Oocytes with intact granulosa attachments stay arrested, while those stripped of granulosa cells resume meiosis. Which mechanism best explains this result?",
+  ch:["Withdrawal of follicular estradiol","Removal of inhibin feedback","Exposure to an LH-like signal","Loss of granulosa-derived cAMP","Breakdown of the zona pellucida"],a:3,
+  why:"Granulosa projections cross the zona pellucida and connect to the oocyte by gap junctions, supplying cAMP, the main inhibitor of meiosis. After the LH surge these projections dissociate and meiosis resumes. Stripping the cells removes the cAMP supply in the same way, without any LH.",
+  wr:["Estradiol is rising before the surge in vivo and does not hold the oocyte in arrest.","Inhibin acts at the pituitary to suppress FSH and has no direct effect on oocyte meiosis.","The medium contained no hormones, and intact oocytes in it stayed arrested. Correct if comparing oocytes from before and after an LH surge.",null,"The zona is crossed by the projections but is not the arrest signal. Correct if asked which layer the projections must traverse."],
+  src:L53+", slides 25, 29–31"}
+]},
+{name:"Male Function",lec:"L53",clues:[
+ {v:100,type:"Mechanism",topic:"Epididymal tail storage environment",
+  stem:"Semen collected from a bull's epididymal tail contains mature but immotile sperm. Which luminal environment keeps these stored sperm quiescent?",
+  ch:["Slightly acidic, high potassium","Alkaline, high potassium","Slightly acidic, low potassium","Alkaline, low potassium","Neutral, high sodium"],a:0,
+  why:"The tail of the epididymis keeps sperm inactive with low metabolism and movement through a slightly acidic pH and a high K+ concentration, while completing maturation and protecting against oxidative stress.",
+  wr:[null,"Potassium is right, but the tail lumen is slightly acidic, not alkaline.","pH is right, but the tail has a high, not low, potassium concentration.","Both pH and potassium are reversed.","The lecture describes a high potassium, slightly acidic lumen, not a sodium-dominated neutral one."],
+  src:L53M+", slide 44"},
+ {v:200,type:"Expected outcome",topic:"Semen quality after sexual rest",
+  stem:"A 5-year-old bull is collected for semen evaluation after three months of sexual rest. Compared with a bull collected regularly, what should the clinician expect from this first ejaculate?",
+  ch:["Higher sperm motility","No spermatozoa present","Lower semen quality","Depleted sperm reserves","Immature sperm only"],a:2,
+  why:"Sperm stored in the epididymal tail for a prolonged time during sexual rest can give lower semen quality than in more active males.",
+  wr:["Prolonged storage lowers quality rather than raising motility. Seminal plasma stimulates motility in any ejaculate.","The tail is full of stored sperm after rest, not empty.",null,"Depletion follows frequent sequential ejaculations within one day. Correct for a bull collected several times that day.","Maturation is completed in the tail. Sperm from the epididymal head have no fertile potential, so this fits head sperm."],
+  src:L53M+", slides 36, 44, 46"},
+ {v:300,type:"Expected outcome",topic:"Pampiniform plexus heat exchange",
+  stem:"After inguinal surgery, a ram has scarring of the spermatic cord that separates the testicular veins from the convoluted testicular artery. What is the most likely consequence for this ram?",
+  ch:["Increased testosterone output","Reduced sperm production","Loss of the blood-testis barrier","Failure of erection","Impaired ejaculatory reflex"],a:1,
+  why:"The pampiniform plexus wraps the testicular artery so arterial blood near 39 °C gives up heat to venous blood near 33 °C. Without that countercurrent exchange the testes are perfused with warmer blood, and spermatogenesis, which is heat sensitive, falls.",
+  wr:["The plexus also allows testosterone countercurrent exchange, but losing it would not raise output.",null,"The barrier is formed by Sertoli cell tight junctions and is unaffected by cord vasculature. Correct after testicular trauma with immune infiltration.","Erection depends on parasympathetic nitric oxide release and penile blood flow, not the cord's heat exchange.","The ejaculatory reflex runs through pudendal sensory nerves, the spinal cord and hypogastric motor nerves."],
+  src:L53M+", slides 37–39, 43, 51, 53"},
+ {v:400,type:"Lesion localization",topic:"Ejaculatory reflex: sensory limb",
+  stem:"A 4-year-old bull has an injury to the dorsal nerve of the penis. He shows normal libido, achieves erection and mounts, but fails to ejaculate. Which part of the ejaculatory pathway is most likely disrupted?",
+  ch:["Hypothalamic behavior center","Parasympathetic nitric oxide release","Spinal integrating center","Hypogastric motor output","Sensory input from the glans"],a:4,
+  why:"The dorsal nerve of the penis continues the pudendal nerve and carries sensory fibers from the glans. Ejaculation is a reflex triggered by glans receptors signaling through the pudendal nerve to the spinal cord, so losing the sensory limb blocks it.",
+  wr:["Normal libido and mounting show the hypothalamic center is working.","Erection is intact, so NO-mediated vasodilation is working.","The lesion is a peripheral nerve. Correct for a spinal cord lesion.","Motor output comes from the hypogastric plexus. Correct for a hypogastric plexus lesion.",null],
+  src:L52+", slide 69; "+L53M+", slides 49–53"},
+ {v:500,type:"Complication",topic:"Blood-testis barrier and autoimmune orchitis",
+  stem:"A 3-year-old bull developed marked testicular swelling after a kick 6 weeks ago. The swelling has resolved, but semen quality remains poor and a biopsy shows immune cells within the seminiferous tubules. Which disruption best explains his persistent infertility?",
+  ch:["Breach of Sertoli cell junctions","Loss of Leydig cell output","Damage to the pampiniform plexus","Failure of epididymal contraction","Loss of tunica dartos tone"],a:0,
+  why:"Sertoli cell tight junctions, with peritubular cells, form the blood-testis barrier. Sperm carry antigens the immune system has never seen, so once the barrier is breached immune cells and antibodies enter the tubules and cause autoimmune orchitis.",
+  wr:[null,"Leydig cells produce testosterone and do not form the barrier.","Plexus damage impairs testicular cooling. Correct if heat were the problem and no immune cells were found.","Vigorous tail smooth muscle contraction releases stored sperm. Correct if sperm were stored but not ejaculated.","The dartos draws the testes up in the cold. Correct for a scrotum hanging loosely in cold weather."],
+  src:L53M+", slides 38, 43, 45; "+L52+", slide 15"}
+]},
+{name:"Drugs & Surgery",lec:"L54",clues:[
+ {v:100,type:"Drug choice",topic:"hCG for ovulation in mares",
+  stem:"A mare in a controlled-breeding program has a mature preovulatory follicle, and the manager wants ovulation timed to a planned insemination. Which drug mimics LH to promote ovulation in this mare?",
+  ch:["Dinoprost tromethamine","Oxytocin","Melatonin","Human chorionic gonadotropin","Dexamethasone"],a:3,
+  why:"hCG mimics LH, promotes ovulation and supports luteal function, and is used in controlled-breeding programs in mares. Peak plasma levels occur within about 6 hours.",
+  wr:["Dinoprost is a PGF2α that lyses the CL. Correct if the goal were short-cycling her.","Oxytocin stimulates uterine contraction and milk letdown.","Melatonin manages seasonality in sheep and goats.",null,"Low-dose corticosteroids in mares modulate maternal immunity in early pregnancy. Correct if asked about reducing early embryonic loss."],
+  src:L54+", slides 13, 15, 20, 22, 24"},
+ {v:200,type:"Drug choice",topic:"Terminating unwanted feedlot pregnancies",
+  stem:"A feedlot owner reports that 30 heifers were bred by accident about two months ago, and he wants the pregnancies terminated. Which drug is most appropriate?",
+  ch:["Gonadorelin","Cloprostenol","Deslorelin","Oxytocin","Dexamethasone"],a:1,
+  why:"Cloprostenol is a prostaglandin F2α analogue. Its target is the corpus luteum, and luteolysis drops progesterone, which terminates pregnancy.",
+  wr:["Gonadorelin is a GnRH analogue used to induce ovulation and treat ovarian cysts.",null,"Deslorelin implants cause contraception by GnRH receptor downregulation. Correct if asked how to prevent pregnancy, not end one.","Oxytocin causes uterine contraction and milk letdown and does not lyse the CL.","Dexamethasone induces parturition in cattle nearing term. At two months gestation it is not the luteolytic choice."],
+  src:L54+", slides 3–4, 8, 11, 15, 24"},
+ {v:300,type:"Next best step",topic:"GnRH–PGF2α–GnRH fixed-time AI protocol",
+  stem:"A 3-year-old Holstein on a fixed-time insemination protocol received gonadorelin on day 0 and dinoprost on day 7, and the farm has no labor for heat detection. What is the next step to synchronize ovulation before insemination?",
+  ch:["Dinoprost on day 9","Insemination on day 8","Oxytocin on day 9","Heat detection from day 8","Gonadorelin on day 9"],a:4,
+  why:"Day 0 GnRH ovulates or luteinizes the dominant follicle, day 7 PGF2α causes luteolysis, day 9 a second GnRH dose triggers ovulation, and timed AI follows on day 10 without heat detection.",
+  wr:["Luteolysis was already induced on day 7. Correct as the day-7 step only.","Insemination comes on day 10, after the second GnRH dose.","Oxytocin has no role in triggering ovulation in this protocol.","The protocol is designed to avoid heat detection.",null],
+  src:L54+", slide 27"},
+ {v:400,type:"Next best step",topic:"Canine ovulation induction",
+  stem:"A 3-year-old Labrador bitch with irregular cycles is being monitored for AI, and her serum progesterone has just risen above 2 ng/mL. The owner wants insemination timed precisely. What is the most appropriate next step?",
+  ch:["Administer dinoprost","Administer FSH","Administer hCG","Administer oxytocin","Administer dexamethasone"],a:2,
+  why:"Progesterone above 2 ng/mL indicates preovulatory luteinization. Giving hCG, or a GnRH analogue, induces ovulation within about 48 hours, and mating or AI is planned for that window.",
+  wr:["Dinoprost lyses the CL and would work against the cycle you are trying to time.","FSH induces estrus in anestrous bitches. Correct for a bitch that is not cycling.",null,"Oxytocin drives uterine contraction and milk letdown.","Dexamethasone is used to induce parturition in cattle near term."],
+  src:L54+", slides 12, 28"},
+ {v:500,type:"Complication",topic:"Adverse effect of prolonged gonadotropins",
+  stem:"To induce estrus, a breeder's anestrous bitch was given FSH injections over a prolonged course at more than the recommended dose. Weeks later she has a vulvar discharge, and ultrasonography shows a markedly thickened, irregular endometrium. Which complication is most likely?",
+  ch:["Cystic endometrial hyperplasia","Persistent corpus luteum","Anovulatory follicular cysts","Premature luteolysis","GnRH receptor downregulation"],a:0,
+  why:"Gonadotropin dosing must be precise because prolonged or excessive dosing can cause cystic endometrial hyperplasia, which fits her endometrial changes.",
+  wr:[null,"A persistent CL follows failed endometrial PGF2α production, as in a cow with endometrial damage.","Anovulatory follicular cysts are a cattle problem managed with GnRH analogues.","Premature luteolysis follows prostaglandin treatment, which she did not receive.","Downregulation follows sustained-release GnRH analogues such as deslorelin implants."],
+  src:L54+", slides 8, 10, 12, 17"}
+]}
+];
+
+const FINAL={type:"Next best step",topic:"Protecting the ureters during spay",v:0,
+ stem:"During an ovariohysterectomy on an obese 3-year-old bitch, both ovarian pedicles have been ligated and the uterine body lies between the bladder and colon. Before placing ligatures around the uterine body and uterine vessels, which structure must the surgeon confirm is excluded?",
+ ch:["Round ligament","Urethra","Descending colon","Ureter","Vaginal artery"],a:3,
+ why:"The uterine body lies between the bladder and colon, adjacent to the ureters, and is ligated and transected with the uterine arteries. The ureters must be identified and kept out of the ligature.",
+ wr:["The round ligament continues caudally from the proper ligament through the inguinal canal and is not the hazard at this ligature.","The uterine body lies dorsal to the bladder and proximal urethra, away from the ligature site.","The colon lies dorsal and is easily retracted.",null,"The uterine artery is the cranial branch of the vaginal artery, and these vessels must be ligated rather than avoided."],
+ src:L51+", slides 15, 32–33, 62; "+L54+", slide 63"};
+
+
+  const JOIN_URL = (location.protocol === "file:") ? "" : location.origin + location.pathname;
+  const URLQ = new URLSearchParams(location.search);
+  const FINAL_CAT = "Spay Surgical Anatomy";
+
+  /* ---------- helpers ---------- */
+  const app = document.getElementById("app");
+  const LET = "ABCDE";
+  const TEAMNAMES = ["Team Ovary", "Team Testis", "Team Cervix", "Team Epididymis"];
+  const ROOM_PREFIX = "rw1-";
+  const HOST_KEY = "rw1-live-host", ME_KEY = "rw1-live-me";
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const clean = (s, n) => String(s || "").replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, "").trim().slice(0, n || 18);
+  const store = {
+    get(k) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+  const fmt = n => (n < 0 ? "−" : "") + "$" + Math.abs(n);
+  const sgn = n => n > 0 ? "+" + n : n < 0 ? "−" + Math.abs(n) : "0";
+  function clue(key) {
+    if (key === "F") return { c: { name: "Final Jeopardy · " + FINAL_CAT }, q: FINAL, v: 0 };
+    const [ci, r] = String(key).split("-").map(Number);
+    const c = CATS[ci]; if (!c || !c.clues[r]) return null;
+    return { c, q: c.clues[r], v: c.clues[r].v };
+  }
+  const tileKeys = []; for (let r = 0; r < 5; r++) for (let ci = 0; ci < 5; ci++) tileKeys.push(ci + "-" + r);
+  const tileIdx = k => { const [ci, r] = k.split("-").map(Number); return ci * 5 + r; };
+  function pid() { return "p" + Math.random().toString(36).slice(2, 10); }
+
+  const PEER_PREFIX = "rw1live-sgu-";
+  const hasPeer = typeof window.Peer === "function";
+  function peerOpts() {
+    const o = { debug: 0 };
+    if (URLQ.get("ph")) { o.host = URLQ.get("ph"); o.port = +URLQ.get("pp") || 9000; o.path = "/"; o.secure = false; }
+    return o;
+  }
+
+  let view = "home";
+  let homeCfg = { mode: "teams", nt: 2, timer: 45 };
+  let homeErr = "";
+
+  /* ---------- home ---------- */
+  function renderHome() {
+    view = "home";
+    if (URLQ.get("code") && !renderHome.focused) { renderHome.focused = true; setTimeout(() => { const n = document.getElementById("joinName"); if (n && !n.value) n.focus(); }, 0); }
+    const me = store.get(ME_KEY) || {};
+    const saved = store.get(HOST_KEY);
+    const canResume = saved && saved.phase !== "over";
+    const status = hasPeer ? "" : '<p class="err">The connection library didn\'t load. Check that this device is online, then reload the page.</p>';
+    const dis = hasPeer ? "" : "disabled";
+    app.innerHTML = `
+      <header>
+        <p class="eyebrow">Week 8 · Systems 3 Reproduction · Lessons 51–54</p>
+        <h1>Repro Week 1 Live</h1>
+        <p class="dim" style="max-width:62ch;margin:6px 0 0">Play on your phones, no accounts needed. The big screen hosts, everyone joins with the 4-digit code, and every player answers every clue.</p>
+      </header>
+      ${status}
+      <div class="home-grid">
+        <section class="card" aria-labelledby="joinH">
+          <h2 id="joinH">Join a game</h2>
+          <div class="field"><label for="joinCode">Game code</label>
+            <input id="joinCode" class="code-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="0000" value="${esc(URLQ.get("code") || me.code || "")}"></div>
+          <div class="field"><label for="joinName">Your name</label>
+            <input id="joinName" maxlength="18" autocomplete="nickname" placeholder="e.g. Kolby" value="${esc(me.n || "")}"></div>
+          ${homeErr ? `<p class="err">${esc(homeErr)}</p>` : ""}
+          <button class="btn" id="joinBtn" ${dis}>Join</button>
+        </section>
+        <section class="card" aria-labelledby="hostH">
+          <h2 id="hostH">Host on this screen</h2>
+          <div class="field"><span class="lbl">Mode</span>
+            <div class="seg" role="group" aria-label="Mode">
+              <button id="mTeams" aria-pressed="${homeCfg.mode === "teams"}">Teams</button>
+              <button id="mSolo" aria-pressed="${homeCfg.mode === "solo"}">Players · 1v1</button>
+            </div></div>
+          ${homeCfg.mode === "teams" ? `<div class="field"><span class="lbl">Number of teams</span>
+            <div class="seg" role="group" aria-label="Number of teams">${[2, 3, 4].map(n => `<button data-nt="${n}" aria-pressed="${homeCfg.nt === n}">${n}</button>`).join("")}</div></div>` : ""}
+          <div class="field"><span class="lbl">Time per clue</span>
+            <div class="seg" role="group" aria-label="Time per clue">${[30, 45, 60].map(n => `<button data-tm="${n}" aria-pressed="${homeCfg.timer === n}">${n}s</button>`).join("")}</div></div>
+          <ul class="rules">
+            <li>Everyone answers every clue on their phone.</li>
+            <li>Right answers gain the tile value, wrong answers lose it, no answer scores 0.</li>
+            <li>The pick rotates: each turn a different ${homeCfg.mode === "teams" ? "team" : "player"} chooses the next tile.</li>
+            ${homeCfg.mode === "teams" ? "<li>Team score is the average of its members, so uneven teams stay fair.</li>" : ""}
+          </ul>
+          <div class="ctrls" style="justify-content:flex-start">
+            <button class="btn" id="hostBtn" ${dis}>Start a new game</button>
+            ${canResume ? `<button class="btn ghost" id="resumeBtn" ${dis}>Resume game ${esc(saved.code)}</button>` : ""}
+          </div>
+        </section>
+      </div>`;
+    const code = document.getElementById("joinCode");
+    code.addEventListener("input", () => { code.value = code.value.replace(/\D/g, "").slice(0, 4); });
+    document.getElementById("joinBtn").onclick = () => {
+      const c = code.value.trim(), n = clean(document.getElementById("joinName").value);
+      if (!/^\d{4}$/.test(c)) { homeErr = "Enter the 4-digit code shown on the host screen."; return renderHome(); }
+      if (!n) { homeErr = "Enter a name so the host can see who joined."; return renderHome(); }
+      homeErr = ""; joinGame(c, n);
+    };
+    document.getElementById("mTeams").onclick = () => { homeCfg.mode = "teams"; renderHome(); };
+    document.getElementById("mSolo").onclick = () => { homeCfg.mode = "solo"; renderHome(); };
+    app.querySelectorAll("[data-nt]").forEach(b => b.onclick = () => { homeCfg.nt = +b.dataset.nt; renderHome(); });
+    app.querySelectorAll("[data-tm]").forEach(b => b.onclick = () => { homeCfg.timer = +b.dataset.tm; renderHome(); });
+    document.getElementById("hostBtn").onclick = () => startHost(null);
+    const rb = document.getElementById("resumeBtn"); if (rb) rb.onclick = () => startHost(saved);
+  }
+
+  /* =====================================================================
+     HOST  — the host tab is the source of truth. Its presence object in
+     the named room carries the whole game state; phones read it and
+     answer through their own presence. No event topics are needed, so
+     any signed-in viewer can play.
+     ===================================================================== */
+  let H = null, SEEN = {}, hostTimer = null, hostErr = "", confirmEnd = false;
+
+  async function startHost(saved) {
+    H = saved || {
+      code: String(Math.floor(1000 + Math.random() * 9000)), mode: homeCfg.mode,
+      teams: homeCfg.mode === "teams" ? TEAMNAMES.slice(0, homeCfg.nt) : [], timer: homeCfg.timer,
+      phase: "lobby", round: 1, used: "0".repeat(25), ch: null, q: null, left: 0,
+      P: {}, order: [], A: {}, W: {}, last: {}, dist: null
+    };
+    view = "host";
+    app.innerHTML = '<p class="note pulse">Opening game ' + esc(H.code) + '…</p>';
+    openHostPeer(0);
+  }
+
+  let peer = null; const CONNS = {}, PSTATE = {};
+  function hostProcess() { onHostPeers({ peers: Object.keys(PSTATE).map(id => ({ presence: PSTATE[id] })) }); }
+  function sendG(conn) { try { if (conn.open) conn.send({ t: "g", g: buildG() }); } catch (e) {} }
+  function openHostPeer(tries) {
+    if (peer) { try { peer.destroy(); } catch (e) {} }
+    peer = new Peer(PEER_PREFIX + H.code, peerOpts());
+    peer.on("open", () => { hostErr = ""; clearInterval(hostTimer); hostTimer = setInterval(hostTick, 1000); pushHost(); });
+    peer.on("connection", conn => {
+      conn.on("data", m => {
+        if (!m || m.t !== "pr" || !m.pr || typeof m.pr.pid !== "string" || !/^p[a-z0-9]{4,12}$/.test(m.pr.pid)) return;
+        const id = m.pr.pid;
+        if (CONNS[id] && CONNS[id] !== conn) { try { CONNS[id].close(); } catch (e) {} }
+        CONNS[id] = conn; conn._pid = id;
+        PSTATE[id] = Object.assign({}, m.pr, { role: "player" });
+        hostProcess(); sendG(conn);
+      });
+      conn.on("close", () => { const id = conn._pid; if (id && CONNS[id] === conn) { delete CONNS[id]; delete PSTATE[id]; hostProcess(); } });
+      conn.on("error", () => {});
+    });
+    peer.on("disconnected", () => { setTimeout(() => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} }, 1500); });
+    peer.on("error", e => {
+      if (e.type === "unavailable-id") {
+        if (H.phase !== "lobby" && tries < 6) { hostErr = "Reclaiming game code " + H.code + "…"; renderHost(); setTimeout(() => openHostPeer(tries + 1), 3000); }
+        else { H.code = String(Math.floor(1000 + Math.random() * 9000)); openHostPeer(tries + 1); }
+      } else if (e.type === "browser-incompatible") { hostErr = "This browser can't host. Use Chrome, Edge, Safari or Firefox."; renderHost(); }
+      else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) { hostErr = "Connection trouble. Retrying…"; renderHost(); setTimeout(() => { if (H && view === "host") openHostPeer(tries + 1); }, 4000); }
+    });
+  }
+
+  function online(pid) { return !!SEEN[pid]; }
+  function teamOf(pid) { const p = H.P[pid]; return p ? p.t : -1; }
+  function eligible(pid) { return online(pid) && (H.mode !== "teams" || (teamOf(pid) >= 0 && teamOf(pid) < H.teams.length)); }
+  function eligiblePids() { return Object.keys(H.P).filter(eligible); }
+
+  function onHostPeers(change) {
+    const seen = {};
+    let changed = false;
+    for (const p of change.peers) {
+      const pr = p.presence || {};
+      if (pr.role !== "player" || typeof pr.pid !== "string" || !/^p[a-z0-9]{4,12}$/.test(pr.pid)) continue;
+      const id = pr.pid;
+      if (!H.P[id]) {
+        if (Object.keys(H.P).length >= 30) continue;
+        H.P[id] = { n: clean(pr.n) || "Player", t: -1, s: 0 }; H.order.push(id); changed = true;
+      }
+      seen[id] = pr;
+      const P = H.P[id], n = clean(pr.n) || P.n;
+      if (n !== P.n) { P.n = n; changed = true; }
+      const t = Number.isInteger(pr.t) && pr.t >= 0 && pr.t < H.teams.length ? pr.t : -1;
+      if (H.mode === "teams" && t !== P.t && t >= 0) { P.t = t; changed = true; }
+    }
+    const before = Object.keys(SEEN).sort().join(), after = Object.keys(seen).sort().join();
+    if (before !== after) changed = true;
+    SEEN = seen;
+
+    if (H.phase === "choose") {
+      if (!chooserValid()) { const was = JSON.stringify(H.ch); advanceChooser(); if (JSON.stringify(H.ch) !== was) changed = true; }
+      for (const id in SEEN) {
+        const pk = SEEN[id].pick;
+        if (pk && pk.at === H.round && isChooser(id) && tileKeys.includes(pk.k) && H.used[tileIdx(pk.k)] === "0") { startQuestion(pk.k); return; }
+      }
+    }
+    if (H.phase === "question" || H.phase === "final_q") {
+      for (const id in SEEN) {
+        const a = SEEN[id].ans;
+        if (a && a.at === H.round && H.A[id] == null && Number.isInteger(a.c) && a.c >= 0 && a.c < 5) { H.A[id] = a.c; changed = true; }
+      }
+      const el = eligiblePids();
+      if (el.length && el.every(id => H.A[id] != null)) { reveal(); return; }
+    }
+    if (H.phase === "final_wager") {
+      for (const id in SEEN) {
+        const w = SEEN[id].wager;
+        if (w && w.at === H.round && Number.isFinite(w.w)) {
+          const v = Math.max(0, Math.min(Math.round(w.w), Math.max(0, H.P[id].s)));
+          if (H.W[id] !== v) { H.W[id] = v; changed = true; }
+        }
+      }
+    }
+    if (changed) pushHost(); else renderHost();
+  }
+
+  /* chooser: {t: teamIndex} in teams mode, {p: pid} in players mode */
+  function isChooser(id) { if (!H.ch) return false; return H.mode === "teams" ? teamOf(id) === H.ch.t : id === H.ch.p; }
+  function chooserValid() { return H.ch && eligiblePids().some(isChooser); }
+  function advanceChooser() {
+    const el = eligiblePids();
+    if (!el.length) { H.ch = null; return; }
+    if (H.mode === "teams") {
+      const nt = H.teams.length, start = H.ch ? H.ch.t : -1;
+      for (let k = 1; k <= nt; k++) { const t = (start + k) % nt; if (el.some(id => teamOf(id) === t)) { H.ch = { t }; return; } }
+    } else {
+      const n = H.order.length, i = H.ch ? H.order.indexOf(H.ch.p) : -1;
+      for (let k = 1; k <= n; k++) { const id = H.order[(i + k) % n]; if (el.includes(id)) { H.ch = { p: id }; return; } }
+    }
+  }
+  function chooserLabel() {
+    if (!H.ch) return "the host";
+    return H.mode === "teams" ? H.teams[H.ch.t] : (H.P[H.ch.p] ? H.P[H.ch.p].n : "a player");
+  }
+
+  function startGame() { H.round = 1; H.ch = null; advanceChooser(); H.phase = "choose"; H.A = {}; pushHost(); }
+  function startQuestion(k) { H.q = k; H.phase = "question"; H.left = H.timer; H.A = {}; H.dist = null; pushHost(); }
+  function reveal() {
+    const isF = H.phase === "final_q";
+    const { q, v } = clue(isF ? "F" : H.q);
+    const dist = [0, 0, 0, 0, 0];
+    H.last = {};
+    for (const id in H.P) {
+      const c = H.A[id];
+      const stake = isF ? (H.W[id] || 0) : v;
+      let d = 0;
+      if (c != null) { dist[c]++; d = c === q.a ? stake : -stake; }
+      H.P[id].s += d; H.last[id] = d;
+    }
+    H.dist = dist; H.left = 0;
+    if (!isF) H.used = H.used.slice(0, tileIdx(H.q)) + "1" + H.used.slice(tileIdx(H.q) + 1);
+    H.phase = isF ? "final_reveal" : "reveal";
+    pushHost();
+  }
+  function nextClue() {
+    H.round++; H.A = {}; H.dist = null;
+    if (!H.used.includes("0")) { H.phase = "final_wager"; H.W = {}; H.q = "F"; }
+    else { advanceChooser(); H.phase = "choose"; H.q = null; }
+    pushHost();
+  }
+  function startFinalQ() { H.phase = "final_q"; H.left = H.timer + 15; H.A = {}; pushHost(); }
+  function skipTurn() { advanceChooser(); pushHost(); }
+
+  function hostTick() {
+    if (!H || (H.phase !== "question" && H.phase !== "final_q")) return;
+    if (H.left > 0) H.left--;
+    if (H.left <= 0) reveal(); else pushHost();
+  }
+
+  function standingsRows() {
+    if (H.mode === "teams") {
+      return H.teams.map((name, t) => {
+        const mem = Object.keys(H.P).filter(id => H.P[id].t === t);
+        const avg = mem.length ? Math.round(mem.reduce((a, id) => a + H.P[id].s, 0) / mem.length) : 0;
+        const dl = mem.length ? Math.round(mem.reduce((a, id) => a + (H.last[id] || 0), 0) / mem.length) : 0;
+        return { name, sub: mem.length + (mem.length === 1 ? " player" : " players"), s: avg, d: dl, on: mem.some(online), turn: H.ch && H.ch.t === t };
+      }).sort((a, b) => b.s - a.s);
+    }
+    return H.order.map(id => ({ name: H.P[id].n, sub: "", s: H.P[id].s, d: H.last[id] || 0, on: online(id), turn: H.ch && H.ch.p === id })).sort((a, b) => b.s - a.s);
+  }
+
+  function pushHost() {
+    store.set(HOST_KEY, H);
+    for (const id in CONNS) sendG(CONNS[id]);
+    renderHost();
+  }
+  function buildG() {
+    const P = {}; for (const id in H.P) P[id] = [H.P[id].n, H.P[id].t, H.P[id].s];
+    return { code: H.code, mode: H.mode, teams: H.teams, phase: H.phase, round: H.round, used: H.used,
+      ch: H.ch, q: H.q, left: H.left, P, last: H.last, na: Object.keys(H.A).length, ne: eligiblePids().length,
+      w: Object.keys(H.W).length };
+  }
+
+  let qrDone = "";
+  function renderHost() {
+    if (view !== "host" || !H) return;
+    const timerEl = document.getElementById("hTimer");
+    const key = JSON.stringify([H.phase, H.round, H.q, H.used, H.ch, H.P, Object.keys(SEEN).sort(), H.A, H.W, H.dist, hostErr, confirmEnd]);
+    if (timerEl && renderHost.key === key) { timerEl.textContent = H.left; timerEl.classList.toggle("low", H.left <= 5); return; }
+    renderHost.key = key;
+    const players = Object.keys(H.P);
+    const howJoin = JOIN_URL ? `Scan the code, or go to <b>${esc(JOIN_URL.replace(/^https?:\/\//, ""))}</b> and enter` : "Open this page on your phone, choose <b>Join</b>, enter";
+    let stage = "";
+    const banner = (who, right) => `<div class="banner"><div class="who">${who}</div><div class="ctrls">${right || ""}</div></div>`;
+    if (H.phase === "lobby") {
+      const groups = H.mode === "teams"
+        ? `<div class="teamcols">${H.teams.map((t, i) => `<div class="teamcol"><h3>${esc(t)}</h3><ul>${players.filter(id => H.P[id].t === i).map(id => `<li>${esc(H.P[id].n)}</li>`).join("") || '<li style="list-style:none;margin-left:-16px">No one yet</li>'}</ul></div>`).join("")}
+           ${players.some(id => H.P[id].t < 0) ? `<div class="teamcol"><h3>Picking a team</h3><ul>${players.filter(id => H.P[id].t < 0).map(id => `<li>${esc(H.P[id].n)}</li>`).join("")}</ul></div>` : ""}</div>`
+        : `<div class="teamcols"><div class="teamcol"><h3>Players</h3><ul>${players.map(id => `<li>${esc(H.P[id].n)}</li>`).join("") || '<li style="list-style:none;margin-left:-16px">No one yet</li>'}</ul></div></div>`;
+      const ready = eligiblePids().length > 0;
+      stage = banner(`Waiting for players · <em>${eligiblePids().length}</em> ready`, `<button class="btn" id="hStart" ${ready ? "" : "disabled"}>Start game</button>`) + groups;
+    } else if (H.phase === "choose") {
+      stage = banner(`<em>${esc(chooserLabel())}</em> is choosing a clue`, `<button class="btn dark" id="hSkip">Skip turn</button>`) +
+        `<p class="note" style="color:var(--ink-light-dim);margin:0">They pick on their phone. You can also tap a tile here for them.</p>` + boardHTML(true);
+    } else if (H.phase === "question" || H.phase === "final_q" || H.phase === "reveal" || H.phase === "final_reveal") {
+      const isF = H.phase === "final_q" || H.phase === "final_reveal";
+      const shown = H.phase === "reveal" || H.phase === "final_reveal";
+      const { c, q, v } = clue(isF ? "F" : H.q);
+      const total = H.dist ? H.dist.reduce((a, b) => a + b, 0) : 0;
+      stage = `<div class="qhead"><span class="cat">${esc(c.name)}${isF ? "" : " · $" + v}</span>
+          ${shown ? `<span class="progress">${total} answered</span>` : `<span class="progress">${Object.keys(H.A).length}/${eligiblePids().length} locked in</span><span class="timer${H.left <= 5 ? " low" : ""}" id="hTimer">${H.left}</span>`}</div>
+        <p class="stem">${esc(q.stem)}</p>
+        ${q.img ? `<img class="qimg" id="hImg" alt="Diagram of the canine left ovary, uterine horn and ligaments with five lettered structures" src="${IMG_LIG}">` : ""}
+        <div class="opts">${q.ch.map((t, i) => `<div class="opt${shown && i === q.a ? " right" : ""}">${shown && total ? `<span class="fill" style="width:${Math.round(100 * H.dist[i] / total)}%"></span>` : ""}<span class="lt">${LET[i]}</span><span class="txt">${esc(t)}</span><span class="n">${shown ? H.dist[i] : ""}</span></div>`).join("")}</div>
+        ${shown ? `<div class="why"><p><strong style="color:var(--sage)">${LET[q.a]}. ${esc(q.ch[q.a])}.</strong> ${esc(q.why)}</p><p class="src">${esc(q.src)}</p></div>` : ""}
+        <div class="ctrls">${shown
+          ? (H.phase === "final_reveal" ? `<button class="btn" id="hOver">Show final standings</button>` : `<button class="btn" id="hNext">${H.used.includes("0") ? "Next turn" : "On to Final Jeopardy"}</button>`)
+          : `<button class="btn dark" id="hReveal">Reveal now</button>`}</div>`;
+    } else if (H.phase === "final_wager") {
+      stage = banner(`Final Jeopardy · <em>${esc(FINAL_CAT)}</em>`, `<button class="btn" id="hFinalGo">Show the clue</button>`) +
+        `<p style="margin:0;color:var(--ink-light-dim)">Everyone wagers on their phone, up to their own score. Players at $0 or below can only wager $0. <b style="color:var(--ink-light)">${Object.keys(H.W).length}/${eligiblePids().length}</b> wagers locked. Anyone who doesn't lock a wager plays for $0.</p>`;
+    } else if (H.phase === "over") {
+      const rows = standingsRows();
+      stage = `<div class="banner"><div class="who">Final standings</div></div><div class="podium">${rows.map(r => `<div class="row"><span>${esc(r.name)}</span><span class="tnum">${fmt(r.s)}</span></div>`).join("")}</div>
+        <div class="ctrls"><button class="btn ghost" id="hHome" style="color:var(--ink-light)">Back to start</button></div>`;
+    }
+    const rows = standingsRows();
+    app.innerHTML = `
+      <div class="hostbar">
+        <div class="codebox">
+          <div><p class="eyebrow" style="color:var(--ink-light-dim)">Game code</p><div class="big">${esc(H.code)}</div></div>
+          <p class="how">${howJoin} the code and your name.</p>
+          ${JOIN_URL ? '<div class="qr" id="qr" aria-label="QR code linking to this game"></div>' : ""}
+        </div>
+        <div class="meta"><span class="pill">${H.mode === "teams" ? H.teams.length + " teams" : "Players"}</span><span class="pill">${H.timer}s clues</span><span class="pill">${H.used.split("").filter(x => x === "1").length}/25 played</span></div>
+      </div>
+      ${hostErr ? `<p class="err">${esc(hostErr)}</p>` : ""}
+      <div class="host-main">
+        <section class="stage" aria-live="polite">${stage}</section>
+        <aside class="rail card">
+          <h2>${H.mode === "teams" ? "Team standings" : "Standings"}</h2>
+          <ol class="standings">${rows.map((r, i) => `<li class="${r.on ? "" : "off"}${r.turn ? " turn" : ""}"><span class="rk">${i + 1}</span><span class="nm">${esc(r.name)}${r.sub ? `<small>${r.sub}</small>` : ""}</span><span class="delta ${r.d > 0 ? "up" : r.d < 0 ? "down" : ""}">${(H.phase === "reveal" || H.phase === "final_reveal") && r.d ? sgn(r.d) : ""}</span><span class="sc ${r.s < 0 ? "neg" : ""}">${fmt(r.s)}</span></li>`).join("") || '<li style="grid-template-columns:1fr"><span class="dim">No players yet</span></li>'}</ol>
+          <div class="confirm">${confirmEnd
+            ? `<span class="note">End this game for everyone?</span><button class="btn" id="hEndYes" style="background:var(--coral);color:var(--on-coral)">End game</button><button class="btn ghost" id="hEndNo">Keep playing</button>`
+            : `<button class="btn ghost" id="hEnd">End game</button>`}</div>
+        </aside>
+      </div>`;
+    if (JOIN_URL && window.QRCode) { try { new QRCode(document.getElementById("qr"), { text: JOIN_URL + "?code=" + H.code, width: 192, height: 192, correctLevel: QRCode.CorrectLevel.M }); } catch (e) {} }
+    const on = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+    on("hStart", startGame); on("hSkip", skipTurn); on("hReveal", reveal); on("hNext", nextClue);
+    on("hFinalGo", startFinalQ); on("hOver", () => { H.phase = "over"; pushHost(); });
+    on("hEnd", () => { confirmEnd = true; renderHost(); }); on("hEndNo", () => { confirmEnd = false; renderHost(); });
+    on("hEndYes", () => { confirmEnd = false; H.phase = "over"; pushHost(); });
+    on("hHome", () => { store.del(HOST_KEY); clearInterval(hostTimer); if (peer) { try { peer.destroy(); } catch (e) {} } peer = null; for (const k in CONNS) delete CONNS[k]; for (const k in PSTATE) delete PSTATE[k]; H = null; renderHome(); });
+    const img = document.getElementById("hImg"); if (img) img.onclick = () => img.classList.toggle("big");
+    app.querySelectorAll(".tile[data-k]").forEach(b => b.onclick = () => startQuestion(b.dataset.k));
+  }
+
+  function boardHTML(clickable, used) {
+    used = used || H.used;
+    let h = CATS.map(c => `<div class="cat-h"><small>${c.lec}</small>${esc(c.name)}</div>`).join("");
+    for (let r = 0; r < 5; r++) for (let ci = 0; ci < 5; ci++) {
+      const k = ci + "-" + r, u = used[tileIdx(k)] === "1";
+      h += `<button class="tile${clickable ? "" : " static"}" ${u || !clickable ? "disabled" : ""} ${clickable && !u ? `data-k="${k}"` : ""} aria-label="${esc(CATS[ci].name)} for $${VALUES[r]}${u ? ", played" : ""}">${u ? "" : "$" + VALUES[r]}</button>`;
+    }
+    return `<div class="boardscroll"><div class="board">${h}</div></div>`;
+  }
+  const VALUES = [100, 200, 300, 400, 500];
+
+  /* =====================================================================
+     PHONE — reads the host's presence, answers through its own presence
+     ===================================================================== */
+  let lookedLong = false;
+  let ME = null, G = null, hostSeen = false, myAns = {}, myPick = {}, myWager = {}, phoneErr = "", lookTimer = null;
+
+  async function joinGame(code, name) {
+    const prev = store.get(ME_KEY) || {};
+    ME = { pid: prev.pid || pid(), n: name, code, t: prev.code === code && Number.isInteger(prev.t) ? prev.t : -1 };
+    store.set(ME_KEY, ME);
+    view = "phone"; G = null; hostSeen = false; phoneErr = "";
+    app.innerHTML = '<p class="note pulse">Joining game ' + esc(code) + '…</p>';
+    ME_PR = { role: "player", pid: ME.pid, n: ME.n, t: ME.t };
+    connectPhone();
+    clearTimeout(lookTimer);
+    lookedLong = false;
+    lookTimer = setTimeout(() => { lookedLong = true; if (!hostSeen) renderPhone(true); }, 7000);
+    renderPhone(true);
+  }
+  let ppeer = null, conn = null, ME_PR = {}, retryT = null;
+  function connectPhone() {
+    if (!ppeer || ppeer.destroyed) {
+      ppeer = new Peer(peerOpts());
+      ppeer.on("error", e => {
+        if (e.type === "peer-unavailable") { lookedLong = true; if (!hostSeen) renderPhone(true); scheduleRetry(); }
+        else if (e.type === "browser-incompatible") { phoneErr = "This browser can't join. Try Chrome or Safari."; renderPhone(true); }
+        else if (["network", "server-error", "socket-error", "socket-closed"].includes(e.type)) { scheduleRetry(); }
+      });
+      ppeer.on("disconnected", () => { setTimeout(() => { try { if (ppeer && !ppeer.destroyed) ppeer.reconnect(); } catch (e) {} }, 1500); });
+    }
+    const go = () => {
+      if (view !== "phone") return;
+      const c = ppeer.connect(PEER_PREFIX + ME.code, { reliable: true });
+      conn = c;
+      c.on("open", () => { c.send({ t: "pr", pr: ME_PR }); });
+      c.on("data", m => { if (conn === c && m && m.t === "g" && m.g && m.g.code === ME.code) { G = m.g; hostSeen = true; renderPhone(false); } });
+      c.on("close", () => { if (conn === c && view === "phone") { G = null; renderPhone(true); scheduleRetry(); } });
+      c.on("error", () => {});
+    };
+    if (ppeer.open) go(); else ppeer.once("open", go);
+  }
+  function scheduleRetry() {
+    clearTimeout(retryT);
+    retryT = setTimeout(() => { if (view === "phone" && !(conn && conn.open)) connectPhone(); }, 3000);
+  }
+  function sendMe(extra) {
+    Object.assign(ME_PR, { n: ME.n, t: ME.t }, extra || {});
+    if (conn && conn.open) { try { conn.send({ t: "pr", pr: ME_PR }); } catch (e) {} }
+  }
+  function onPhonePeers(change) {
+    let best = null;
+    for (const p of change.peers) {
+      const pr = p.presence || {};
+      if (pr.role === "host" && pr.g && pr.g.code === ME.code && (!best || p.updatedAt > best.updatedAt)) best = p;
+    }
+    if (best) { G = best.presence.g; hostSeen = true; } else if (hostSeen) { G = null; }
+    renderPhone(false);
+  }
+
+  function myScore() { return G && G.P && G.P[ME.pid] ? G.P[ME.pid][2] : 0; }
+  function amChooser() {
+    if (!G || !G.ch) return false;
+    return G.mode === "teams" ? ME.t === G.ch.t : G.ch.p === ME.pid;
+  }
+  function gChooserLabel() {
+    if (!G || !G.ch) return "Someone";
+    if (G.mode === "teams") return (G.teams && G.teams[G.ch.t]) || "A team";
+    return (G.P && G.P[G.ch.p] && G.P[G.ch.p][0]) || "A player";
+  }
+  function phoneStandings() {
+    if (!G || !G.P) return [];
+    const ids = Object.keys(G.P);
+    if (G.mode === "teams") return (G.teams || []).map((name, t) => {
+      const mem = ids.filter(id => G.P[id][1] === t);
+      return { name, s: mem.length ? Math.round(mem.reduce((a, id) => a + G.P[id][2], 0) / mem.length) : 0, me: ME.t === t };
+    }).sort((a, b) => b.s - a.s);
+    return ids.map(id => ({ name: G.P[id][0], s: G.P[id][2], me: id === ME.pid })).sort((a, b) => b.s - a.s);
+  }
+
+  function renderPhone(force) {
+    if (view !== "phone") return;
+    const timerEl = document.getElementById("pTimer");
+    const key = JSON.stringify([G && [G.phase, G.round, G.q, G.used, G.ch, G.P, G.last, G.teams, G.mode, G.w], hostSeen, ME.t, myAns, myPick, myWager, phoneErr]);
+    if (!force && timerEl && renderPhone.key === key) { timerEl.textContent = G ? G.left : ""; timerEl.classList.toggle("low", G && G.left <= 5); return; }
+    if (!force && renderPhone.key === key) return;
+    renderPhone.key = key;
+
+    const teamName = G && G.mode === "teams" && ME.t >= 0 && G.teams ? G.teams[ME.t] : "";
+    const top = `<div class="pbar"><span class="nm">${esc(ME.n)}${teamName ? `<small>${esc(teamName)}</small>` : ""}</span><span class="sc ${myScore() < 0 ? "neg" : ""}">${fmt(myScore())}</span></div>`;
+    let body = "";
+    const leave = `<button class="btn ghost" id="pLeave">Leave game</button>`;
+
+    if (phoneErr) body = `<div class="card"><p class="err">${esc(phoneErr)}</p>${leave}</div>`;
+    else if (!G) {
+      body = hostSeen
+        ? `<div class="pcard center"><p class="big-msg">The host left the game.</p><p style="margin:0;color:var(--ink-light-dim)">If they reopen it with the same code, you'll reconnect here.</p></div>`
+        : `<div class="pcard center"><p class="big-msg pulse">Looking for game ${esc(ME.code)}…</p><p style="margin:0;color:var(--ink-light-dim)">${lookedLong ? "No game with this code is running yet. Check the code on the host screen." : "Hang tight."}</p></div>`;
+    } else if (G.mode === "teams" && !(ME.t >= 0 && ME.t < (G.teams || []).length)) {
+      body = `<div class="pcard"><p class="big-msg">Pick your team</p><div class="teampick">${(G.teams || []).map((t, i) => `<button data-team="${i}">${esc(t)}</button>`).join("")}</div></div>`;
+    } else {
+      const ph = G.phase;
+      if (ph === "lobby") {
+        const n = Object.keys(G.P || {}).length;
+        body = `<div class="pcard center"><p class="big-msg">You're in.</p><p style="margin:0;color:var(--ink-light-dim)">${n} ${n === 1 ? "player has" : "players have"} joined. Watch the big screen. The host starts when everyone's ready.</p>
+          ${G.mode === "teams" ? `<button class="btn dark" id="pSwitch">Switch team</button>` : ""}</div>`;
+      } else if (ph === "choose") {
+        if (amChooser()) {
+          const picked = myPick[G.round];
+          body = `<div class="pcard"><p class="big-msg">${G.mode === "teams" ? "Your team picks." : "Your pick."}</p><p style="margin:0;color:var(--ink-light-dim)">${picked ? "Sent. Waiting for the host…" : "Tap a tile. The first tap from your " + (G.mode === "teams" ? "team" : "phone") + " counts."}</p>
+            ${phoneBoard(!picked)}</div>`;
+        } else {
+          body = `<div class="pcard center"><p class="big-msg">${esc(gChooserLabel())} is choosing…</p><p style="margin:0;color:var(--ink-light-dim)">Get ready to answer.</p></div>`;
+        }
+      } else if (ph === "question" || ph === "final_q") {
+        const isF = ph === "final_q";
+        const cl = clue(isF ? "F" : G.q);
+        if (!cl) body = `<div class="pcard"><p class="big-msg">Loading clue…</p></div>`;
+        else {
+          const mine = myAns[G.round];
+          body = `<div class="pcard"><div class="qhead"><span class="cat">${esc(cl.c.name)}${isF ? " · wager " + fmt(myWager[G.round] || 0) : " · $" + cl.v}</span><span class="timer${G.left <= 5 ? " low" : ""}" id="pTimer">${G.left}</span></div>
+            <p class="stem">${esc(cl.q.stem)}</p>
+            ${cl.q.img ? `<img class="qimg" id="pImg" alt="Diagram of the canine left ovary, uterine horn and ligaments with five lettered structures" src="${IMG_LIG}">` : ""}
+            <div class="pchoices">${cl.q.ch.map((t, i) => `<button class="pchoice${mine === i ? " mine" : ""}" data-c="${i}" ${mine != null ? "disabled" : ""}><span class="lt">${LET[i]}</span><span>${esc(t)}</span></button>`).join("")}</div>
+            ${mine != null ? `<p style="margin:0;color:var(--ink-light-dim)">Locked in. Waiting for everyone else.</p>` : ""}</div>`;
+        }
+      } else if (ph === "reveal" || ph === "final_reveal") {
+        const isF = ph === "final_reveal";
+        const cl = clue(isF ? "F" : G.q);
+        const d = G.last && G.last[ME.pid] != null ? G.last[ME.pid] : 0;
+        const mine = myAns[G.round];
+        const ok = mine === cl.q.a;
+        const msg = mine == null ? `<p class="big-msg">No answer · $0</p>` : ok ? `<p class="big-msg ok">Correct! ${sgn(d)}</p>` : `<p class="big-msg bad">Not this time. ${sgn(d)}</p>`;
+        body = `<div class="pcard">${msg}
+          <div class="pchoices">${cl.q.ch.map((t, i) => `<button class="pchoice${i === cl.q.a ? " right" : mine === i ? " wrong" : ""}" disabled><span class="lt">${LET[i]}</span><span>${esc(t)}</span></button>`).join("")}</div>
+          <p style="margin:0;color:var(--ink-light-dim)">${esc(cl.q.why)}</p>
+          <details><summary>Why the other choices are wrong</summary><ul>${cl.q.ch.map((t, i) => i === cl.q.a ? "" : `<li><b>${LET[i]}. ${esc(t)}.</b> ${esc(cl.q.wr[i] || "")}</li>`).join("")}</ul></details>
+          <p style="margin:0;font-size:.8rem;color:var(--ink-light-dim)">${esc(cl.q.src)}</p></div>` + standingsCard();
+      } else if (ph === "final_wager") {
+        const max = Math.max(0, myScore());
+        const locked = myWager[G.round];
+        body = `<div class="pcard"><p class="eyebrow" style="color:var(--gold)">Final Jeopardy · ${esc(FINAL_CAT)}</p>
+          ${locked != null ? `<p class="big-msg">Wager locked: ${fmt(locked)}</p><p style="margin:0;color:var(--ink-light-dim)">Waiting for the host to show the clue.</p>`
+          : max === 0 ? `<p class="big-msg">You play this one for $0.</p><p style="margin:0;color:var(--ink-light-dim)">Your score is at or below $0, so there's nothing to wager. You can still answer.</p><button class="btn" id="pWager0">Got it</button>`
+          : `<div class="wager"><p style="margin:0;color:var(--ink-light-dim)">Wager up to ${fmt(max)}.</p><div class="amt" id="wAmt">${fmt(Math.min(max, 500))}</div>
+              <input type="range" id="wRange" min="0" max="${max}" step="50" value="${Math.min(max, 500)}" aria-label="Wager amount">
+              <button class="btn" id="pWager">Lock wager</button></div>`}</div>`;
+      } else if (ph === "over") {
+        const rows = phoneStandings();
+        body = `<div class="pcard"><p class="big-msg">Game over</p><div class="podium">${rows.map(r => `<div class="row"><span>${esc(r.name)}${r.me ? " (you)" : ""}</span><span class="tnum">${fmt(r.s)}</span></div>`).join("")}</div></div>`;
+      }
+    }
+    app.innerHTML = `<div class="phone">${top}${body}<div class="ctrls" style="justify-content:center">${phoneErr ? "" : leave}</div></div>`;
+
+    app.querySelectorAll("[data-team]").forEach(b => b.onclick = () => { ME.t = +b.dataset.team; store.set(ME_KEY, ME); sendMe(); renderPhone(true); });
+    const sw = document.getElementById("pSwitch"); if (sw) sw.onclick = () => { ME.t = -1; store.set(ME_KEY, ME); sendMe(); renderPhone(true); };
+    app.querySelectorAll(".pboard .tile[data-k]").forEach(b => b.onclick = () => { myPick[G.round] = b.dataset.k; sendMe({ pick: { at: G.round, k: b.dataset.k } }); renderPhone(true); });
+    app.querySelectorAll(".pchoice[data-c]").forEach(b => b.onclick = () => { if (myAns[G.round] != null) return; myAns[G.round] = +b.dataset.c; sendMe({ ans: { at: G.round, c: +b.dataset.c } }); renderPhone(true); });
+    const rg = document.getElementById("wRange"); if (rg) rg.oninput = () => { document.getElementById("wAmt").textContent = fmt(+rg.value); };
+    const wb = document.getElementById("pWager"); if (wb) wb.onclick = () => { const w = +rg.value; myWager[G.round] = w; sendMe({ wager: { at: G.round, w } }); renderPhone(true); };
+    const w0 = document.getElementById("pWager0"); if (w0) w0.onclick = () => { myWager[G.round] = 0; sendMe({ wager: { at: G.round, w: 0 } }); renderPhone(true); };
+    const img = document.getElementById("pImg"); if (img) img.onclick = () => img.classList.toggle("big");
+    const lv = document.getElementById("pLeave"); if (lv) lv.onclick = () => { clearTimeout(retryT); if (conn) { try { conn.close(); } catch (e) {} } conn = null; if (ppeer) { try { ppeer.destroy(); } catch (e) {} } ppeer = null; G = null; hostSeen = false; myAns = {}; myPick = {}; myWager = {}; clearTimeout(lookTimer); renderHome(); };
+  }
+  function phoneBoard(clickable) {
+    let h = CATS.map(c => `<div class="cat-h">${esc(c.name)}</div>`).join("");
+    for (let r = 0; r < 5; r++) for (let ci = 0; ci < 5; ci++) {
+      const k = ci + "-" + r, u = G.used[tileIdx(k)] === "1";
+      h += `<button class="tile" ${u || !clickable ? "disabled" : ""} data-k="${k}" aria-label="${esc(CATS[ci].name)} for $${VALUES[r]}">${u ? "" : VALUES[r]}</button>`;
+    }
+    return `<div class="pboard">${h}</div>`;
+  }
+  function standingsCard() {
+    const rows = phoneStandings();
+    return `<div class="card"><h2>${G.mode === "teams" ? "Team standings" : "Standings"}</h2><ol class="standings">${rows.map((r, i) => `<li${r.me ? ' class="turn"' : ""}><span class="rk">${i + 1}</span><span class="nm">${esc(r.name)}${r.me ? " (you)" : ""}</span><span></span><span class="sc ${r.s < 0 ? "neg" : ""}">${fmt(r.s)}</span></li>`).join("")}</ol></div>`;
+  }
+
+  renderHome();
+})();
+</script>
+</body>
+</html>
